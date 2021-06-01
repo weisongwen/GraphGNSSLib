@@ -1,0 +1,29 @@
+<!-- Data intro (ublox, GPS/BeiDou, 20200603)
+Static data in TST square, for static RTK evaluation -->
+<launch>
+    <!-- GNSS positioning mode, 0: single, 1:DGPS/DGNSS, 2: kinematic -->
+    <param name="mode"       type="int" value="2" />
+    <!-- number of frequency (1:L1,2:L1+L2,3:L1+L2+L5) -->
+    <param name="nf"      type="int" value="2" />
+    <param name="soltype"  type="int" value="0" />
+
+    <!-- path of dataset -->
+    <param name="roverMeasureFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST2/2020_06_03_TST_03.obs" />
+    <param name="baseMeasureFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST2/hksc155d.20o" />
+    <param name="BeiDouEmpFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST2/hksc155d.20b" />
+    <param name="GPSEmpFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST2/hksc155d.20n" />
+
+    <param name="out_folder"      type="string" value="$(find global_fusion)/dataset/gps_solution_TST2/rtklibResult.pos" />
+
+    <node name="gnss_preprocessor_node" pkg="global_fusion" type="gnss_preprocessor_node" output="screen" />
+    
+    <!-- open the Rviz together with the OpenStreetMap -->
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+      args="-d $(find global_fusion)/rviz/gnss_positioning.rviz" required="true">
+    </node>
+    <node pkg="rostopic" type="rostopic" name="fake_gps_fix" args="pub /gps/fix sensor_msgs/NavSatFix --latch --file=$(find rviz_satellite)/launch/demo_TST_static.gps" />
+    <!-- Static fake TF transform -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="static_tf_fake" args="0 0 0 0 0 0 map base_link" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="static_tf_fake_m2w" args="0 0 0 0 0 0 map world" />
+
+</launch>

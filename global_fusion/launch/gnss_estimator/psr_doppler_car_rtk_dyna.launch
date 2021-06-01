@@ -1,0 +1,5 @@
+<!-- subscribe the raw measurements, perform snap shot GNSS single point positioning based pseudorange measurements.  -->
+<launch>
+    <node name="psr_doppler_car_rtk_dyna_node" pkg="global_fusion" type="psr_doppler_car_rtk_dyna_node" output="screen" />
+
+</launch>

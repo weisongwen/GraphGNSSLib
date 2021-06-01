@@ -1,0 +1,12 @@
+<!-- subscribe the raw measurements, perform snap shot GNSS single point positioning based pseudorange measurements.  -->
+<launch>
+
+    <param name="sol_folder"               type="string" value="$(find global_fusion)/FGO_trajectoryllh_psr_dop_fusion.csv" />
+    <param name="gt_sol_folder"               type="string" value="$(find global_fusion)/dataset/gps_solution_TST/groundTruth_TST.csv" />
+
+    <param name="trajectory_path"               type="string" value="$(find global_fusion)/trajectory.csv" />
+    <param name="error_path"               type="string" value="$(find global_fusion)/error.csv" />
+    
+    <node name="evaluate_gps_solution_node" pkg="global_fusion" type="evaluate_gps_solution_node" output="screen" />
+
+</launch>

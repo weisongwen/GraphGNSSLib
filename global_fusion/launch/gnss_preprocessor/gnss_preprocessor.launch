@@ -1,0 +1,27 @@
+<launch>
+    <!-- GNSS positioning mode, 0: single, 1:DGPS/DGNSS, 2: kinematic -->
+    <param name="mode"       type="int" value="2" />
+    <!-- number of frequency (1:L1,2:L1+L2,3:L1+L2+L5) -->
+    <param name="nf"      type="int" value="2" />
+    <param name="soltype"  type="int" value="0" />
+
+    <!-- path of dataset -->
+    <param name="roverMeasureFile" type="string" value="$(find global_fusion)/dataset/HuaweiPhone20201113/P40pro_InsideCar/2020_11_13_10_47_33_GMT_08_00_best/part2/GEOP318D.20o" />
+    <param name="baseMeasureFile" type="string" value="$(find global_fusion)/dataset/HuaweiPhone20201113/P40pro_InsideCar/2020_11_13_10_47_33_GMT_08_00_best/part2/hksc318e.20o" />
+    <param name="BeiDouEmpFile" type="string" value="$(find global_fusion)/dataset/HuaweiPhone20201113/P40pro_InsideCar/2020_11_13_10_47_33_GMT_08_00_best/part2/hksc318e.20o" />
+    <param name="GPSEmpFile" type="string" value="$(find global_fusion)/dataset/HuaweiPhone20201113/P40pro_InsideCar/2020_11_13_10_47_33_GMT_08_00_best/part2/hksc318e.20n" />
+
+    <param name="out_folder"      type="string" value="$(find global_fusion)/dataset/HuaweiPhone20201113/P40pro_InsideCar/2020_11_13_10_47_33_GMT_08_00_best/part2/rtklibResult.pos" />
+
+    <node name="gnss_preprocessor_node" pkg="global_fusion" type="gnss_preprocessor_node" output="screen" />
+    
+    <!-- open the Rviz together with the OpenStreetMap -->
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+      args="-d $(find global_fusion)/rviz/gnss_positioning.rviz" required="true">
+    </node>
+    <node pkg="rostopic" type="rostopic" name="fake_gps_fix" args="pub /gps/fix sensor_msgs/NavSatFix --latch --file=$(find rviz_satellite)/launch/demo_huaweiPro_TST20201113.gps" />
+    <!-- Static fake TF transform -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="static_tf_fake" args="0 0 0 0 0 0 map base_link" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="static_tf_fake_m2w" args="0 0 0 0 0 0 map world" />
+
+</launch>
