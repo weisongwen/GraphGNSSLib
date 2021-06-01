@@ -1,0 +1,8 @@
+<launch>
+    <!-- GNSS positioning mode, 0: single, 1:DGPS/DGNSS, 2: kinematic -->
+    <param name="startGPSSec"       type="int" value="0" />
+    <param name="endGPSSec"         type="int" value="1000000" />
+
+    <node name="rosbag_generator_node" pkg="global_fusion" type="rosbag_generator_node" output="screen" />
+
+</launch>

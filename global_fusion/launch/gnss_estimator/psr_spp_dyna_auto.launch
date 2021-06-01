@@ -1,0 +1,6 @@
+<!-- subscribe the raw measurements, perform snap shot GNSS single point positioning based pseudorange measurements.  -->
+<launch>
+
+    <node name="psr_spp_dyna_auto_node" pkg="global_fusion" type="psr_spp_dyna_auto_node" output="screen" />
+
+</launch>

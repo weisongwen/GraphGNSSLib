@@ -1,0 +1,7 @@
+<!-- subscribe the raw measurements, perform snap shot GNSS single point positioning based pseudorange measurements.  -->
+<launch>
+    <param name="logPath"                type="string"  value="$(find global_fusion)/FGO_trajectoryllh_psr_dop_fusion.csv" />
+    
+    <node name="psr_doppler_fusion_node" pkg="global_fusion" type="psr_doppler_fusion_node" output="screen" />
+
+</launch>
