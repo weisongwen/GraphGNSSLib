@@ -71,10 +71,6 @@ The GNSS positioning via FGO is validated using static dataset collected near TS
   - GPS second span: **46701** to **47185**
   - satellite system: **GPS/BeiDou**
   - measurements considered: double-differenced pseudorange and carrier-phase measurements, Doppler measurements
-  - result is saved by default
-    ```c++
-    ~/GraphGNSSLib/trajectory_psr_dop_fusion.csv
-    ```
 
 please enable the following in rtklib.h
 ```bash
@@ -100,10 +96,6 @@ The GNSS RTK-FGO is validated using static dataset collected near TST of Hong Ko
   - GPS second span: **270149** to **270306**
   - satellite system: **GPS/BeiDou**
   - measurements considered: double-differenced pseudorange and carrier-phase measurements, Doppler measurements
-  - result is saved by default
-    ```c++
-    ~/GraphGNSSLib/FGO_trajectoryllh_pdrtk.csv
-    ```
 
 please enable the following in rtklib.h
 ```bash
