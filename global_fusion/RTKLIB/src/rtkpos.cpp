@@ -69,7 +69,7 @@
 
 static const char rcsid[]="$Id:$";
 
-#define delayms 10 // 200
+#define delayms 200 // 200
 // #define delayms 1000
 
 /* constants/macros ----------------------------------------------------------*/

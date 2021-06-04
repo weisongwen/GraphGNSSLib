@@ -136,7 +136,9 @@ struct DDpseudorangeVSVFactor
         residuals[0] = (est_DD_pr - DD_pr) /T(pow(0.4, 2)); 
         #else
         // residuals[0] = (est_DD_pr - DD_pr) /T(var_u2i);
+        
         residuals[0] = (est_DD_pr - DD_pr) /T(var);
+        // std::cout<< "residuals[0]-> " << residuals[0] << std::endl;
         #endif
 
         return true;

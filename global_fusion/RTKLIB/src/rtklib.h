@@ -119,7 +119,7 @@ extern "C" {
 // #define ENAGLO      1                   /* Weisong: enable BeiDou System */
 
 
-#define RTK_FGO 0
+#define RTK_FGO 1
 
 #if RTK_FGO
 // TST data, evaluation for GPS solutions 2 (static)
