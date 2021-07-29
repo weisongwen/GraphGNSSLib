@@ -119,7 +119,7 @@ extern "C" {
 // #define ENAGLO      1                   /* Weisong: enable BeiDou System */
 
 
-#define RTK_FGO 1
+#define RTK_FGO 0
 
 #if RTK_FGO
 // TST data, evaluation for GPS solutions 2 (static)
@@ -146,55 +146,6 @@ extern "C" {
 #define start_gps_sec 46701
 #define end_gps_sec 47185
 
-/** Kowloon Tong data, evaluation for GNSS-GNC (dynamic, loop) 20200314 **/
-// #define ref_lon    114.179526047         /* Weisong: reference longitude */
-// #define ref_lat    22.3304807923        /* Weisong: reference latitude */
-// #define ref_alt    11.7615366792                /* Weisong: reference altitude */
-// #define station_x     -2414266.9200       /* Weisong: pose x of base station */
-// #define station_y     5386768.9870        /* Weisong: pose y of base station */
-// #define station_z     2407460.0310        /* Weisong: pose z of station */
-// #define start_gps_sec 549935
-// #define end_gps_sec 550236
-
-/** midundao data, evaluation for GNSS-GNC (dynamic, loop) 20200314**/
-// #define ref_lon    114.169399512         /* Weisong: reference longitude */
-// #define ref_lat    22.3106958296        /* Weisong: reference latitude */
-// #define ref_alt    18.9121172493                /* Weisong: reference altitude */
-// #define station_x     -2414266.9200       /* Weisong: pose x of base station */
-// #define station_y     5386768.9870        /* Weisong: pose y of base station */
-// #define station_z     2407460.0310        /* Weisong: pose z of station */
-// #define start_gps_sec 555318 //555318 556051
-// #define end_gps_sec 556500 // should be 556917, but after 556523, GNSS outage in a short period
-
-/** TST data, evaluation for GNSS-GMM (huawei phone, 2020/12/12 Guohao) **/
-// #define ref_lon    114.179000972         /* Weisong: reference longitude */
-// #define ref_lat    22.3011535667        /* Weisong: reference latitude */
-// #define ref_alt    4                /* Weisong: reference altitude */
-// #define station_x     -2414266.9200       /* Weisong: pose x of base station */
-// #define station_y     5386768.9870        /* Weisong: pose y of base station */
-// #define station_z     2407460.0310        /* Weisong: pose z of station */
-// #define start_gps_sec 0 //555318 556051 184206 444435
-// #define end_gps_sec 1843500007 // should be 556917, but after 556523, GNSS outage in a short period 184357
-
-/** midundao data, evaluation for GNSS-GMM (huawei phone P40 Pro, 2020/12/13 Ivan) **/
-// #define ref_lon    114.169399512         /* Weisong: reference longitude */
-// #define ref_lat    22.3106958296        /* Weisong: reference latitude */
-// #define ref_alt    18.9121172493                /* Weisong: reference altitude */
-// #define station_x     -2414266.9200       /* Weisong: pose x of base station */
-// #define station_y     5386768.9870        /* Weisong: pose y of base station */
-// #define station_z     2407460.0310        /* Weisong: pose z of station */
-// #define start_gps_sec 444435 //555318 556051
-// #define end_gps_sec 445413 // should be 556917, but after 556523, GNSS outage in a short period
-
-/** TST data 20210102 Yinhan, walking, huawei pro (dynamic, loop) **/
-// #define ref_lon    114.179000972         /* Weisong: reference longitude */
-// #define ref_lat    22.3011535667        /* Weisong: reference latitude */
-// #define ref_alt    6.42821512092                /* Weisong: reference altitude */
-// #define station_x     -2414266.9200       /* Weisong: pose x of base station */
-// #define station_y     5386768.9870        /* Weisong: pose y of base station */
-// #define station_z     2407460.0310        /* Weisong: pose z of station */
-// #define start_gps_sec 534504
-// #define end_gps_sec 534504000
 
 #endif
 

@@ -67,10 +67,10 @@ catkin_make
 (**if you fail in this step, try to find another computer with clean system or reinstall Ubuntu and ROS**)
 
 ## 3. Run GNSS positioning via FGO using dataset [UrbanNav](https://www.polyu-ipn-lab.com/download)   
-The GNSS positioning via FGO is validated using static dataset collected near TST of Hong Kong. Several parameters are as follows:
+The GNSS positioning via FGO is validated using dynamic dataset collected near TST of Hong Kong. Several parameters are as follows:
   - GPS second span: **46701** to **47185**
   - satellite system: **GPS/BeiDou**
-  - measurements considered: double-differenced pseudorange and carrier-phase measurements, Doppler measurements
+  - measurements considered: pseudorange and Doppler measurements
 
 please enable the following in rtklib.h
 ```bash

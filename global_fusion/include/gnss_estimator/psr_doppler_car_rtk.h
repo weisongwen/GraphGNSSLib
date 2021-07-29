@@ -703,11 +703,11 @@ public:
         Eigen::Matrix<double, 3,1> state;
         state<< state_array[length-1][0], state_array[length-1][1], state_array[length-1][2];
         double fix_flag = 0;
-        if((S[1]/S[0])> 1.5)
+        if((S[1]/S[0])> 3)
         {
             state = a_state; // 
             fix_flag = 1;
-            LOG(INFO) << "<<<<<Fixed!!!!!!!!!!!!!!!!!!!!!!!!!!>>>>>";
+            // LOG(INFO) << "<<<<<Fixed!!!!!!!!!!!!!!!!!!!!!!!!!!>>>>>";
             fixed_cnt++;
         }
         fixedStateGNSSRTK = state;
