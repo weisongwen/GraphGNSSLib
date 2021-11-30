@@ -6,6 +6,7 @@ This repository is the implementation of the open-sourced package, the GraphGNSS
 **Important Notes**: 
   - Be noted that the **GNSS Positioning** mentioned throughout the package means estimating the positioing of the GNSS receiver based on the combination of pseudorange and Doppler measurements uisng FGO.
   - Be noted that the **GNSS-RTK Positioning** mentioned throughout the package means estimating the positioing (float solution) of the GNSS receiver based on the combination of double-differenced pseudorange, carrier-phase and the Doppler measurements using FGO. Finally, the ambiguity is resolved using LAMBDA algorithm via epoch-by-epoch manner.
+  - An very interesting article illustrating the advantage and potential of the FGO in GNSS positioning, see [**What is a factor graph?**](https://insidegnss.com/q-what-is-a-factor-graph/).
 
 **Authors**: [Weisong Wen](https://weisongwen.wixsite.com/weisongwen), [Li-ta Hsu](https://www.polyu-ipn-lab.com/) from the [Intelligent Positioning and Navigation Laboratory](https://www.polyu-ipn-lab.com/), The Hong Kong Polytechnic University
 
