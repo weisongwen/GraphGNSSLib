@@ -1,7 +1,12 @@
 # GraphGNSSLib
 ### An Open-source Package for GNSS Positioning and Real-time Kinematic Using Factor Graph Optimization
 
+
 This repository is the implementation of the open-sourced package, the GraphGNSSLib, which makes use of the factor graph optimization (FGO) to perform the postprocessing of GNSS positioning and real-time kinematic (RTK) positioning. In this package, measurements from the historical and current epochs are structured into a factor graph which is then solved by non-linear optimization. The package is based on C++ which is compatible with the robot operation system (ROS) platform. Meanwhile, this package combines the RTKLIB (**[version: 2.4.3 b33](http://www.rtklib.com/)**) to read/decode the GNSS [RINEX](https://en.wikipedia.org/wiki/RINEX) files. Users from Robotics field can easily have access to GNSS raw data for further study. We are still improving the code readibility with the hope that this package can benefit the research community.
+<p align="center">
+  <img width="712pix" src="img/tst_0118.gif">
+</p>
+<center> The Optimization Process </center>
 
 **Important Notes**: 
   - Be noted that the **GNSS Positioning** mentioned throughout the package means estimating the positioing of the GNSS receiver based on the combination of pseudorange and Doppler measurements uisng FGO.
