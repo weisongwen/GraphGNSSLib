@@ -1,30 +1,24 @@
 # GraphGNSSLib
 ### An Open-source Package for GNSS Positioning and Real-time Kinematic Using Factor Graph Optimization
 
-
-This repository is the implementation of the open-sourced package, the GraphGNSSLib, which makes use of the factor graph optimization (FGO) to perform the postprocessing of GNSS positioning and real-time kinematic (RTK) positioning. In this package, measurements from the historical and current epochs are structured into a factor graph which is then solved by non-linear optimization. The package is based on C++ which is compatible with the robot operation system (ROS) platform. Meanwhile, this package combines the RTKLIB (**[version: 2.4.3 b33](http://www.rtklib.com/)**) to read/decode the GNSS [RINEX](https://en.wikipedia.org/wiki/RINEX) files. Users from Robotics field can easily have access to GNSS raw data for further study. We are still improving the code readibility with the hope that this package can benefit the research community.
-<p align="center">
-  <img width="712pix" src="img/tst_0118.gif">
-</p>
-<center> The Optimization Process </center>
+This repository is the implementation of the open-sourced package, the GraphGNSSLib, which makes use of the factor graph optimization (FGO) to perform the GNSS positioning and real-time kinematic (RTK) positioning. In this package, measurements from the historical and current epochs are structured into a factor graph which is then solved by non-linear optimization. The package is based on C++ which is compatible with the robot operation system (ROS) platform. Meanwhile, this package combines the RTKLIB (**[version: 2.4.3 b33](http://www.rtklib.com/)**) to read/decode the GNSS [RINEX](https://en.wikipedia.org/wiki/RINEX) files. Users from Robotics field can easily have access to GNSS raw data for further study.
 
 **Important Notes**: 
   - Be noted that the **GNSS Positioning** mentioned throughout the package means estimating the positioing of the GNSS receiver based on the combination of pseudorange and Doppler measurements uisng FGO.
-  - Be noted that the **GNSS-RTK Positioning** mentioned throughout the package means estimating the positioing (float solution) of the GNSS receiver based on the combination of double-differenced pseudorange, carrier-phase and the Doppler measurements using FGO. Finally, the ambiguity is resolved using LAMBDA algorithm via epoch-by-epoch manner.
-  - An very interesting article illustrating the advantage and potential of the FGO in GNSS positioning, see [**What is a factor graph?**](https://insidegnss.com/q-what-is-a-factor-graph/).
+  - Be noted that the **GNSS-RTK Positioning** mentioned throughout the package means estimating the positioing (float solution) of the GNSS receiver based on the combination of double-differenced pseudorange, carrier-phase and the Doppler measurements using FGO. Finally, the ambiguity is resolved using LAMBDA algorithm.
 
 **Authors**: [Weisong Wen](https://weisongwen.wixsite.com/weisongwen), [Li-ta Hsu](https://www.polyu-ipn-lab.com/) from the [Intelligent Positioning and Navigation Laboratory](https://www.polyu-ipn-lab.com/), The Hong Kong Polytechnic University
 
 **Related Papers:** (paper is not exactly same with code)
-  - Wen Weisong., Hsu, Li-Ta.* **Towards Robust GNSS Positioning and Real-Time Kinematic Using Factor Graph Optimization**, *ICRA 2021*, Xi'an, China. ([**Paper Link in arXiv**](https://arxiv.org/ftp/arxiv/papers/2106/2106.01594.pdf)) ([**Paper Link in IEEE**](https://ieeexplore.ieee.org/document/9562037)) ([**Video Link**](https://www.youtube.com/watch?v=rSrXFFv9PGs&t=312s)) (**Accepted**)
+  - Wen Weisong., Hsu, Li-Ta.* (2020) **GraphGNSSLib: An Open-source Package for GNSS Positioning and Real-time Kinematic Using Factor Graph Optimization**, GPS Solutions. (**Submitted**)
 
-*if you use GraphGNSSLib for your academic research, please cite our related [papers](https://arxiv.org/ftp/arxiv/papers/2106/2106.01594.pdf)*
+*if you use GraphGNSSLib for your academic research, please cite our related [papers](https://www.polyu-ipn-lab.com/)*
 
 <p align="center">
   <img width="712pix" src="img/software_flowchart.png">
 </p>
 
-<center> Software flowchart of GraphGNSSLib, more information please refer to our paper.</center>
+<center> Software flowchart of GraphGNSSLib, more information please refer to mannual and paper.</center>
 
 ## 1. Prerequisites
 ### 1.1 **Ubuntu** and **ROS**
@@ -73,10 +67,15 @@ catkin_make
 (**if you fail in this step, try to find another computer with clean system or reinstall Ubuntu and ROS**)
 
 ## 3. Run GNSS positioning via FGO using dataset [UrbanNav](https://www.polyu-ipn-lab.com/download)   
-The GNSS positioning via FGO is validated using dynamic dataset collected near TST of Hong Kong. Several parameters are as follows:
+The GNSS positioning via FGO is validated using static dataset collected near TST of Hong Kong. Several parameters are as follows:
   - GPS second span: **46701** to **47185**
   - satellite system: **GPS/BeiDou**
-  - measurements considered: pseudorange and Doppler measurements
+  - Window Size: **Batch**
+  - measurements considered: double-differenced pseudorange and carrier-phase measurements, Doppler measurements
+  - result is saved by default
+    ```c++
+    ~/GraphGNSSLib/trajectory_psr_dop_fusion.csv
+    ```
 
 please enable the following in rtklib.h
 ```bash
@@ -101,7 +100,12 @@ please enable the following in rtklib.h
 The GNSS RTK-FGO is validated using static dataset collected near TST of Hong Kong. Several parameters are as follows:
   - GPS second span: **270149** to **270306**
   - satellite system: **GPS/BeiDou**
+  - Window Size: **Batch**
   - measurements considered: double-differenced pseudorange and carrier-phase measurements, Doppler measurements
+  - result is saved by default
+    ```c++
+    ~/GraphGNSSLib/FGO_trajectoryllh_pdrtk.csv
+    ```
 
 please enable the following in rtklib.h
 ```bash
@@ -121,8 +125,21 @@ please enable the following in rtklib.h
 <center> Trajectories of three methods (RTK-EKF with the red dots and RTK-FGO with the blue dots throughout the test. The x-axis and y-axis denote the east and north directions, respectively.</center>
 
 
-## 5. Acknowledgements
-We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. We appreciate the help and discussion from [Tim Pfeifer](https://www.tu-chemnitz.de/etit/proaut/en/team/timPfeifer.html) which inspired me to finish this work. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)).
+## 5. Docker Support
 
-## 6. License
+ To run GraphGNSSLib with docker, first make sure  [docker](https://docs.docker.com/install/linux/docker-ce/ubuntu/) are installed on your machine. If you want to use the docker to run the global_fusion:
+```
+cd ~/catkin_ws/src/GraphGNSSLib/docker
+make build
+./run.sh psr_doppler_fusion.launch
+./run.sh roslaunch global_fusion dataublox_TST20190428.launch
+
+```
+Note that the docker building process may take a while depends on your network and machine. After VINS-Mono successfully started, open another terminal and play your bag file, then you should be able to see the result. If you need modify the code, simply run `./run.sh LAUNCH_FILE_NAME` after your changes.
+
+
+## 6. Acknowledgements
+We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)).
+
+## 7. License
 The source code is released under [GPLv3](http://www.gnu.org/licenses/) license. We are still working on improving the code reliability. For any technical issues, please contact Weisong Wen <17902061r@connect.polyu.hk>. For commercial inquiries, please contact Li-ta Hsu <lt.hsu@polyu.edu.hk>.
