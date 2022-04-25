@@ -132,7 +132,7 @@ please enable the following in rtklib.h
 cd ~/catkin_ws/src/GraphGNSSLib/docker
 make build
 ./run.sh psr_doppler_fusion.launch
-./run.sh roslaunch global_fusion dataublox_TST20190428.launch
+./run.sh roslaunch dataublox_TST20190428.launch
 
 ```
 Note that the docker building process may take a while depends on your network and machine. After VINS-Mono successfully started, open another terminal and play your bag file, then you should be able to see the result. If you need modify the code, simply run `./run.sh LAUNCH_FILE_NAME` after your changes.
