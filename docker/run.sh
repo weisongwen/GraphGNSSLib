@@ -52,10 +52,10 @@ docker run \
      roslaunch global_fusion ${1}"
 
 wait $ROSCORE_PID
-wait $RVIZ_PID
+# wait $RVIZ_PID
 
 if [[ $? -gt 128 ]]
 then
     kill $ROSCORE_PID
-    kill $RVIZ_PID
+    # kill $RVIZ_PID
 fi
