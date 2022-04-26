@@ -132,7 +132,7 @@ please enable the following in rtklib.h
 
 cd ~/catkin_ws/src/GraphGNSSLib/docker
 make build
-./start.bash 
+sudo ./start.bash 
 source devel/setup.bash
 # run pseudorange and doppler fusion
 roslaunch global_fusion psr_doppler_fusion.launch
@@ -140,8 +140,13 @@ roslaunch global_fusion psr_doppler_fusion.launch
 # read GNSS raw data and publish as ROS topic
 roslaunch global_fusion dataublox_TST20190428.launch
 ```
- 
-
+  If you want to restart the container, please stop it first:
+  ```bash
+sudo ./stop.bash
+#then restart it
+sudo ./start.bash 
+```
+ The directory  ~/shared_dir is created to connect the container and the host . In the container, it is located at  ~/graph1/shared_dir
 
 ## 6. Acknowledgements
 We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)).
