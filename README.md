@@ -128,14 +128,19 @@ please enable the following in rtklib.h
 ## 5. Docker Support
 
  To run GraphGNSSLib with docker, first make sure  [docker](https://docs.docker.com/install/linux/docker-ce/ubuntu/) are installed on your machine. If you want to use the docker to run the global_fusion:
-```
+```bash
+
 cd ~/catkin_ws/src/GraphGNSSLib/docker
 make build
-./run.sh psr_doppler_fusion.launch
-./run.sh roslaunch dataublox_TST20190428.launch
-
+./start.bash 
+source devel/setup.bash
+# run pseudorange and doppler fusion
+roslaunch global_fusion psr_doppler_fusion.launch
+# a new window may be opened 
+# read GNSS raw data and publish as ROS topic
+roslaunch global_fusion dataublox_TST20190428.launch
 ```
-Note that the docker building process may take a while depends on your network and machine. After VINS-Mono successfully started, open another terminal and play your bag file, then you should be able to see the result. If you need modify the code, simply run `./run.sh LAUNCH_FILE_NAME` after your changes.
+ 
 
 
 ## 6. Acknowledgements
