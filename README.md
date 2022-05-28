@@ -21,6 +21,12 @@ This repository is the implementation of the open-sourced package, the GraphGNSS
 
 <center> Software flowchart of GraphGNSSLib, more information please refer to our paper.</center>
 
+## 0. Docker support
+If you are not familiar with ROS, we highly recommend using our docker container to enjoy GraphGNSSLib. 
+For the details, please go to the branch [test_docker](https://github.com/weisongwen/GraphGNSSLib/tree/test_docker) step 5.
+
+
+
 ## 1. Prerequisites
 ### 1.1 **Ubuntu** and **ROS**
 Ubuntu 64-bit 16.04, ROS Kinetic. [ROS Installation](http://wiki.ros.org/ROS/Installation). We only test it on Ubuntu 16.04 with ROS Kinetic. 
