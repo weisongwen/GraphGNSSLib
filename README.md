@@ -132,21 +132,26 @@ please enable the following in rtklib.h
 
 cd ~/catkin_ws/src/GraphGNSSLib/docker
 make build
-sudo -e ./start.bash 
+sudo -E ./start.bash #Do not delete " -E "
 source devel/setup.bash
 # run pseudorange and doppler fusion
 roslaunch global_fusion psr_doppler_fusion.launch
-# a new window may be opened 
+# you should open another ternimal to enter the docker.
 # read GNSS raw data and publish as ROS topic
 roslaunch global_fusion dataublox_TST20190428.launch
 ```
+
+  Also, there is a [video](https://www.youtube.com/watch?v=WMM2de_SxTw) showing the demo after you have built the docker_file in the directory GraphGNSSLib/docker
+
   If you want to restart the container, please stop it first:
   ```bash
 sudo ./stop.bash
 #then restart it
-sudo -e ./start.bash 
+sudo -E ./start.bash 
 ```
  The directory  ~/shared_dir is created to connect the container and the host . In the container, it is located at  ~/graph1/shared_dir, you can also download the code to shared_dir and compile the program in the container (Recommended for those who are interested in making changes to the source code)
+
+
 
 ## 6. Acknowledgements
 We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)).
