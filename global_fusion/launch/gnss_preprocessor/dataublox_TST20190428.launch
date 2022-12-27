@@ -1,12 +1,6 @@
 <!-- Data intro (ublox, GPS/BeiDou, 20190428)
 This data is starts from the seaside of hong hom to TST -->
 <launch>
-    <!-- GNSS positioning mode, 0: single, 1:DGPS/DGNSS, 2: kinematic -->
-    <param name="mode"       type="int" value="2" />
-    <!-- number of frequency (1:L1,2:L1+L2,3:L1+L2+L5) -->
-    <param name="nf"      type="int" value="2" />
-    <param name="soltype"  type="int" value="0" />
-
     <!-- path of dataset -->
     <param name="roverMeasureFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST/COM3_190428_124409.obs" />
     <param name="baseMeasureFile" type="string" value="$(find global_fusion)/dataset/gps_solution_TST/hksc1180.19o" />
@@ -15,7 +9,13 @@ This data is starts from the seaside of hong hom to TST -->
 
     <param name="out_folder"      type="string" value="$(find global_fusion)/dataset/gps_solution_TST/rtklibResult.pos" />
 
-    <node name="gnss_preprocessor_node" pkg="global_fusion" type="gnss_preprocessor_node" output="screen" />
+    <node name="gnss_preprocessor_node" pkg="global_fusion" type="gnss_preprocessor_node" output="screen">
+      <!-- GNSS positioning mode, 0: single, 1:DGPS/DGNSS, 2: kinematic -->
+      <param name="mode"       type="int" value="2" />
+      <!-- number of frequency (1:L1,2:L1+L2,3:L1+L2+L5) -->
+      <param name="nf"      type="int" value="2" />
+      <param name="soltype"  type="int" value="0" />
+    </node>
     
     <!-- open the Rviz together with the OpenStreetMap -->
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
