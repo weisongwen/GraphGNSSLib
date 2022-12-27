@@ -10,9 +10,9 @@ This repository is the implementation of the open-sourced package, the GraphGNSS
 **Authors**: [Weisong Wen](https://weisongwen.wixsite.com/weisongwen), [Li-ta Hsu](https://www.polyu-ipn-lab.com/) from the [Intelligent Positioning and Navigation Laboratory](https://www.polyu-ipn-lab.com/), The Hong Kong Polytechnic University
 
 **Related Papers:** (paper is not exactly same with code)
-  - Wen Weisong., Hsu, Li-Ta.* (2020) **GraphGNSSLib: An Open-source Package for GNSS Positioning and Real-time Kinematic Using Factor Graph Optimization**, GPS Solutions. (**Submitted**)
+  - Wen, W., & Hsu, L. T. (2021, May). Towards robust GNSS positioning and Real-time kinematic using factor graph optimization. In 2021 IEEE International Conference on Robotics and Automation (ICRA) (pp. 5884-5890). IEEE. 
 
-*if you use GraphGNSSLib for your academic research, please cite our related [papers](https://www.polyu-ipn-lab.com/)*
+*if you use GraphGNSSLib for your academic research, please cite our related [papers](https://ieeexplore.ieee.org/abstract/document/9562037)*
 
 <p align="center">
   <img width="712pix" src="img/software_flowchart.png">
