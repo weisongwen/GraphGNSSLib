@@ -7,10 +7,10 @@ This repository is the implementation of the open-sourced package, the GraphGNSS
   - Be noted that the **GNSS Positioning** mentioned throughout the package means estimating the positioing of the GNSS receiver based on the combination of pseudorange and Doppler measurements uisng FGO.
   - Be noted that the **GNSS-RTK Positioning** mentioned throughout the package means estimating the positioing (float solution) of the GNSS receiver based on the combination of double-differenced pseudorange, carrier-phase and the Doppler measurements using FGO. Finally, the ambiguity is resolved using LAMBDA algorithm.
 
-**Authors**: [Weisong Wen](https://weisongwen.wixsite.com/weisongwen), [Li-ta Hsu](https://www.polyu-ipn-lab.com/) from the [Intelligent Positioning and Navigation Laboratory](https://www.polyu-ipn-lab.com/), The Hong Kong Polytechnic University
+**Authors**: [Weisong Wen](https://weisongwen.wixsite.com/weisongwen), [Li-ta Hsu](https://www.polyu-ipn-lab.com/) from the [Intelligent Positioning and Navigation Laboratory](https://www.polyu-ipn-lab.com/), The Hong Kong Polytechnic University. 
 
 **Related Papers:** (paper is not exactly same with code)
-  - Wen, W., & Hsu, L. T. (2021, May). Towards robust GNSS positioning and Real-time kinematic using factor graph optimization. In 2021 IEEE International Conference on Robotics and Automation (ICRA) (pp. 5884-5890). IEEE. 
+  - Wen, W., & Hsu, L. T. (2021, May). [Towards robust GNSS positioning and Real-time kinematic using factor graph optimization](https://ieeexplore.ieee.org/abstract/document/9562037). In 2021 IEEE International Conference on Robotics and Automation (ICRA) (pp. 5884-5890). IEEE. 
 
 *if you use GraphGNSSLib for your academic research, please cite our related [papers](https://ieeexplore.ieee.org/abstract/document/9562037)*
 
@@ -160,7 +160,7 @@ sudo -E ./start.bash
 
 
 ## 6. Acknowledgements
-We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)).
+We use [Ceres-solver](http://ceres-solver.org/) for non-linear optimization and [RTKLIB](http://www.rtklib.com/) for GNSS data decoding, etc. Some functions are originated from [VINS-mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono). The [rviz_satellite](https://github.com/nobleo/rviz_satellite) is used for visualization. If there is any thing inappropriate, please contact me through 17902061r@connect.polyu.hk ([Weisong WEN](https://weisongwen.wixsite.com/weisongwen)). Thank you very much for the maintainance by Mr. Zhong Yihan. 
 
 ## 7. License
 The source code is released under [GPLv3](http://www.gnu.org/licenses/) license. We are still working on improving the code reliability. For any technical issues, please contact Weisong Wen <17902061r@connect.polyu.hk>. For commercial inquiries, please contact Li-ta Hsu <lt.hsu@polyu.edu.hk>.
