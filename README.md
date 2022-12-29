@@ -106,7 +106,7 @@ please enable the following in rtklib.h
 <p align="center">
   <img width="712pix" src="img/TSTData.gif">
 </p>
-<center> TST data collected by Huawei Phone: Red dots from WLS, purple curve from FGO</center>
+<center> TST data collected by the Smartphone: Red dots from WLS, purple curve from FGO</center>
 
 ## 4. Run GNSS RTK-FGO using static dataset   
 The GNSS RTK-FGO is validated using static dataset collected near TST of Hong Kong. Several parameters are as follows:
