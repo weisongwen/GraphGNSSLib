@@ -11,6 +11,8 @@ This repository is the implementation of the open-sourced package, the GraphGNSS
 
 **Related Papers:** (paper is not exactly same with code)
   - Wen, W., & Hsu, L. T. (2021, May). [Towards robust GNSS positioning and Real-time kinematic using factor graph optimization](https://ieeexplore.ieee.org/abstract/document/9562037). In 2021 IEEE International Conference on Robotics and Automation (ICRA) (pp. 5884-5890). IEEE. 
+  - Wen, W., Zhang, G., & Hsu, L. T. (2021). [GNSS outlier mitigation via graduated non-convexity factor graph optimization](https://ieeexplore.ieee.org/abstract/document/9627801). IEEE Transactions on Vehicular Technology, 71(1), 297-310.
+  - Zhong, Y., Wen, W., Ng, H. F., Bai, X., & Hsu, L. T. (2022, September). [Real-time Factor Graph Optimization Aided by Graduated Non-convexity Based Outlier Mitigation for Smartphone Decimeter Challenge](https://www.ion.org/publications/abstract.cfm?articleID=18382). In Proceedings of the 35th International Technical Meeting of the Satellite Division of The Institute of Navigation (ION GNSS+ 2022) (pp. 2339-2348).
 
 *if you use GraphGNSSLib for your academic research, please cite our related [papers](https://ieeexplore.ieee.org/abstract/document/9562037)*
 
@@ -101,6 +103,10 @@ please enable the following in rtklib.h
 </p>
 <center> Trajectories of three methods (GNSS positioning using WLS with the red curve, GNSS positioning using EKF with the green curve, and GNSS positioning using FGO with blue curve throughout the test. The x-axis and y-axis denote the east and north directions, respectively</center>
 
+<p align="center">
+  <img width="712pix" src="img/TSTData.gif">
+</p>
+<center> TST data collected by Huawei Phone: Red dots from WLS, purple curve from FGO</center>
 
 ## 4. Run GNSS RTK-FGO using static dataset   
 The GNSS RTK-FGO is validated using static dataset collected near TST of Hong Kong. Several parameters are as follows:
