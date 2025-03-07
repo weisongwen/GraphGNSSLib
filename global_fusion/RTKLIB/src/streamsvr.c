@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
 * streamsvr.c : stream server functions
 *
-*          Copyright (C) 2010-2012 by T.TAKASU, All rights reserved.
+*          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DWIN32    use WIN32 API
 *
@@ -13,10 +13,26 @@
 *                           suppress warnings
 *           2013/05/08 1.4  fix bug on 1 s offset for javad -> rtcm conversion
 *           2014/10/16 1.5  support input from stdout
+*           2015/12/05 1.6  support rtcm 3 mt 63 beidou ephemeris
+*           2016/07/23 1.7  change api strsvrstart(),strsvrstop()
+*                           support command for output streams
+*           2016/08/20 1.8  support api change of sendnmea()
+*           2016/09/03 1.9  support ntrip caster function
+*           2016/09/06 1.10 add api strsvrsetsrctbl()
+*           2016/09/17 1.11 add relay back function of output stream
+*                           fix bug on rtcm cyclic output of beidou ephemeris 
+*           2016/10/01 1.12 change api startstrserver()
+*           2017/04/11 1.13 fix bug on search of next satellite in nextsat()
+*           2018/11/05 1.14 update message type of beidou ephemeirs
+*                           support multiple msm messages if nsat x nsig > 64
+*           2020/11/30 1.15 support RTCM MT1131-1137,1041 (NavIC/IRNSS)
+*                           add log paths in API strsvrstart()
+*                           add log status in API strsvrstat()
+*                           support multiple ephemeris sets (e.g. I/NAV-F/NAV)
+*                           delete API strsvrsetsrctbl()
+*                           use integer types in stdint.h
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
-
-static const char rcsid[]="$Id$";
 
 /* test observation data message ---------------------------------------------*/
 static int is_obsmsg(int msg)
@@ -24,17 +40,19 @@ static int is_obsmsg(int msg)
     return (1001<=msg&&msg<=1004)||(1009<=msg&&msg<=1012)||
            (1071<=msg&&msg<=1077)||(1081<=msg&&msg<=1087)||
            (1091<=msg&&msg<=1097)||(1101<=msg&&msg<=1107)||
-           (1111<=msg&&msg<=1117)||(1121<=msg&&msg<=1127);
+           (1111<=msg&&msg<=1117)||(1121<=msg&&msg<=1127)||
+           (1131<=msg&&msg<=1137);
 }
-/* test navigataion data message ---------------------------------------------*/
+/* test navigation data message ----------------------------------------------*/
 static int is_navmsg(int msg)
 {
-    return msg==1019||msg==1020||msg==1044||msg==1045||msg==1046;
+    return msg==1019||msg==1020||msg==1044||msg==1045||msg==1046||
+           msg==1042||msg==63  ||msg==1041;
 }
 /* test station info message -------------------------------------------------*/
 static int is_stamsg(int msg)
 {
-    return msg==1005||msg==1006||msg==1007||msg==1008||msg==1033;
+    return msg==1005||msg==1006||msg==1007||msg==1008||msg==1033||msg==1230;
 }
 /* test time interval --------------------------------------------------------*/
 static int is_tint(gtime_t time, double tint)
@@ -44,8 +62,8 @@ static int is_tint(gtime_t time, double tint)
 }
 /* new stream converter --------------------------------------------------------
 * generate new stream converter
-* args   : int    itype     I   input stream type  (STR_???)
-*          int    otype     I   output stream type (STR_???)
+* args   : int    itype     I   input stream type  (STRFMT_???)
+*          int    otype     I   output stream type (STRFMT_???)
 *          char   *msgs     I   output message type and interval (, separated)
 *          int    staid     I   station id
 *          int    stasel    I   station info selection (0:remote,1:local)
@@ -84,7 +102,7 @@ extern strconv_t *strconvnew(int itype, int otype, const char *msgs, int staid,
         free(conv);
         return NULL;
     }
-    if (!init_raw(&conv->raw)) {
+    if (!init_raw(&conv->raw,itype)) {
         free_rtcm(&conv->rtcm);
         free_rtcm(&conv->out);
         free(conv);
@@ -111,7 +129,7 @@ extern void strconvfree(strconv_t *conv)
 /* copy received data from receiver raw to rtcm ------------------------------*/
 static void raw2rtcm(rtcm_t *out, const raw_t *raw, int ret)
 {
-    int i,sat,prn;
+    int i,sat,set,sys,prn;
     
     out->time=raw->time;
     
@@ -119,35 +137,52 @@ static void raw2rtcm(rtcm_t *out, const raw_t *raw, int ret)
         for (i=0;i<raw->obs.n;i++) {
             out->time=raw->obs.data[i].time;
             out->obs.data[i]=raw->obs.data[i];
+            
+            sys=satsys(raw->obs.data[i].sat,&prn);
+            if (sys==SYS_GLO&&raw->nav.glo_fcn[prn-1]) {
+                out->nav.glo_fcn[prn-1]=raw->nav.glo_fcn[prn-1];
+            }
         }
         out->obs.n=raw->obs.n;
     }
     else if (ret==2) {
         sat=raw->ephsat;
-        switch (satsys(sat,&prn)) {
-            case SYS_GLO: out->nav.geph[prn-1]=raw->nav.geph[prn-1]; break;
-            case SYS_GPS:
-            case SYS_GAL:
-            case SYS_QZS:
-            case SYS_CMP: out->nav.eph [sat-1]=raw->nav.eph [sat-1]; break;
+        set=raw->ephset;
+        sys=satsys(sat,&prn);
+        if (sys==SYS_GLO) {
+            out->nav.geph[prn-1]=raw->nav.geph[prn-1];
+            out->ephsat=sat;
+            out->ephset=set;
         }
-        out->ephsat=sat;
+        else if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP||
+                 sys==SYS_IRN) {
+            out->nav.eph[sat-1+MAXSAT*set]=raw->nav.eph[sat-1+MAXSAT*set];
+            out->ephsat=sat;
+            out->ephset=set;
+        }
+    }
+    else if (ret==5) {
+        out->sta=raw->sta;
     }
     else if (ret==9) {
-        matcpy(out->nav.utc_gps,raw->nav.utc_gps,4,1);
-        matcpy(out->nav.utc_glo,raw->nav.utc_glo,4,1);
-        matcpy(out->nav.utc_gal,raw->nav.utc_gal,4,1);
-        matcpy(out->nav.utc_qzs,raw->nav.utc_qzs,4,1);
+        matcpy(out->nav.utc_gps,raw->nav.utc_gps,8,1);
+        matcpy(out->nav.utc_glo,raw->nav.utc_glo,8,1);
+        matcpy(out->nav.utc_gal,raw->nav.utc_gal,8,1);
+        matcpy(out->nav.utc_qzs,raw->nav.utc_qzs,8,1);
+        matcpy(out->nav.utc_cmp,raw->nav.utc_cmp,8,1);
+        matcpy(out->nav.utc_irn,raw->nav.utc_irn,9,1);
+        matcpy(out->nav.utc_sbs,raw->nav.utc_sbs,4,1);
         matcpy(out->nav.ion_gps,raw->nav.ion_gps,8,1);
         matcpy(out->nav.ion_gal,raw->nav.ion_gal,4,1);
         matcpy(out->nav.ion_qzs,raw->nav.ion_qzs,8,1);
-        out->nav.leaps=raw->nav.leaps;
+        matcpy(out->nav.ion_cmp,raw->nav.ion_cmp,8,1);
+        matcpy(out->nav.ion_irn,raw->nav.ion_irn,8,1);
     }
 }
 /* copy received data from receiver rtcm to rtcm -----------------------------*/
 static void rtcm2rtcm(rtcm_t *out, const rtcm_t *rtcm, int ret, int stasel)
 {
-    int i,sat,prn;
+    int i,sat,set,sys,prn;
     
     out->time=rtcm->time;
     
@@ -156,33 +191,88 @@ static void rtcm2rtcm(rtcm_t *out, const rtcm_t *rtcm, int ret, int stasel)
     if (ret==1) {
         for (i=0;i<rtcm->obs.n;i++) {
             out->obs.data[i]=rtcm->obs.data[i];
+            
+            sys=satsys(rtcm->obs.data[i].sat,&prn);
+            if (sys==SYS_GLO&&rtcm->nav.glo_fcn[prn-1]) {
+                out->nav.glo_fcn[prn-1]=rtcm->nav.glo_fcn[prn-1];
+            }
         }
         out->obs.n=rtcm->obs.n;
     }
     else if (ret==2) {
         sat=rtcm->ephsat;
-        switch (satsys(sat,&prn)) {
-            case SYS_GLO: out->nav.geph[prn-1]=rtcm->nav.geph[prn-1]; break;
-            case SYS_GPS:
-            case SYS_GAL:
-            case SYS_QZS:
-            case SYS_CMP: out->nav.eph [sat-1]=rtcm->nav.eph [sat-1]; break;
+        set=rtcm->ephset;
+        sys=satsys(sat,&prn);
+        if (sys==SYS_GLO) {
+            out->nav.geph[prn-1]=rtcm->nav.geph[prn-1];
+            out->ephsat=sat;
+            out->ephset=set;
         }
-        out->ephsat=sat;
+        else if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP||
+                 sys==SYS_IRN) {
+            out->nav.eph[sat-1+MAXSAT*set]=rtcm->nav.eph[sat-1+MAXSAT*set];
+            out->ephsat=sat;
+            out->ephset=set;
+        }
     }
     else if (ret==5) {
         if (!stasel) out->sta=rtcm->sta;
     }
-    else if (ret==9) {
-        matcpy(out->nav.utc_gps,rtcm->nav.utc_gps,4,1);
-        matcpy(out->nav.utc_glo,rtcm->nav.utc_glo,4,1);
-        matcpy(out->nav.utc_gal,rtcm->nav.utc_gal,4,1);
-        matcpy(out->nav.utc_qzs,rtcm->nav.utc_qzs,4,1);
-        matcpy(out->nav.ion_gps,rtcm->nav.ion_gps,8,1);
-        matcpy(out->nav.ion_gal,rtcm->nav.ion_gal,4,1);
-        matcpy(out->nav.ion_qzs,rtcm->nav.ion_qzs,8,1);
-        out->nav.leaps=rtcm->nav.leaps;
+}
+/* write rtcm3 msm to stream -------------------------------------------------*/
+static void write_rtcm3_msm(stream_t *str, rtcm_t *out, int msg, int sync)
+{
+    obsd_t *data,buff[MAXOBS];
+    int i,j,n,ns,sys,nobs,code,nsat=0,nsig=0,nmsg,mask[MAXCODE]={0};
+    
+    if      (1071<=msg&&msg<=1077) sys=SYS_GPS;
+    else if (1081<=msg&&msg<=1087) sys=SYS_GLO;
+    else if (1091<=msg&&msg<=1097) sys=SYS_GAL;
+    else if (1101<=msg&&msg<=1107) sys=SYS_SBS;
+    else if (1111<=msg&&msg<=1117) sys=SYS_QZS;
+    else if (1121<=msg&&msg<=1127) sys=SYS_CMP;
+    else if (1131<=msg&&msg<=1137) sys=SYS_IRN;
+    else return;
+    
+    data=out->obs.data;
+    nobs=out->obs.n;
+    
+    /* count number of satellites and signals */
+    for (i=0;i<nobs&&i<MAXOBS;i++) {
+        if (satsys(data[i].sat,NULL)!=sys) continue;
+        nsat++;
+        for (j=0;j<NFREQ+NEXOBS;j++) {
+            if (!(code=data[i].code[j])||mask[code-1]) continue;
+            mask[code-1]=1;
+            nsig++;
+        }
     }
+    if (nsig>64) return;
+    
+    /* pack data to multiple messages if nsat x nsig > 64 */
+    if (nsig>0) {
+        ns=64/nsig;         /* max number of sats in a message */
+        nmsg=(nsat-1)/ns+1; /* number of messages */
+    }
+    else {
+        ns=0;
+        nmsg=1;
+    }
+    out->obs.data=buff;
+    
+    for (i=j=0;i<nmsg;i++) {
+        for (n=0;n<ns&&j<nobs&&j<MAXOBS;j++) {
+            if (satsys(data[j].sat,NULL)!=sys) continue;
+            out->obs.data[n++]=data[j];
+        }
+        out->obs.n=n;
+        
+        if (gen_rtcm3(out,msg,0,i<nmsg-1?1:sync)) {
+            strwrite(str,out->buff,out->nbyte);
+        }
+    }
+    out->obs.data=data;
+    out->obs.n=nobs;
 }
 /* write obs data messages ---------------------------------------------------*/
 static void write_obs(gtime_t time, stream_t *str, strconv_t *conv)
@@ -200,14 +290,19 @@ static void write_obs(gtime_t time, stream_t *str, strconv_t *conv)
         /* generate messages */
         if (conv->otype==STRFMT_RTCM2) {
             if (!gen_rtcm2(&conv->out,conv->msgs[i],i!=j)) continue;
+            
+            /* write messages to stream */
+            strwrite(str,conv->out.buff,conv->out.nbyte);
         }
         else if (conv->otype==STRFMT_RTCM3) {
-            if (!gen_rtcm3(&conv->out,conv->msgs[i],i!=j)) continue;
+            if (conv->msgs[i]<=1012) {
+                if (!gen_rtcm3(&conv->out,conv->msgs[i],0,i!=j)) continue;
+                strwrite(str,conv->out.buff,conv->out.nbyte);
+            }
+            else { /* write rtcm3 msm to stream */
+                write_rtcm3_msm(str,&conv->out,conv->msgs[i],i!=j);
+            }
         }
-        else continue;
-        
-        /* write messages to stream */
-        strwrite(str,conv->out.buff,conv->out.nbyte);
     }
 }
 /* write nav data messages ---------------------------------------------------*/
@@ -223,7 +318,7 @@ static void write_nav(gtime_t time, stream_t *str, strconv_t *conv)
             if (!gen_rtcm2(&conv->out,conv->msgs[i],0)) continue;
         }
         else if (conv->otype==STRFMT_RTCM3) {
-            if (!gen_rtcm3(&conv->out,conv->msgs[i],0)) continue;
+            if (!gen_rtcm3(&conv->out,conv->msgs[i],0,0)) continue;
         }
         else continue;
         
@@ -234,20 +329,23 @@ static void write_nav(gtime_t time, stream_t *str, strconv_t *conv)
 /* next ephemeris satellite --------------------------------------------------*/
 static int nextsat(nav_t *nav, int sat, int msg)
 {
-    int sys,p,p0,p1,p2;
+    int sys,set,p,p0,p1,p2;
     
     switch (msg) {
-        case 1019: sys=SYS_GPS; p1=MINPRNGPS; p2=MAXPRNGPS; break;
-        case 1020: sys=SYS_GLO; p1=MINPRNGLO; p2=MAXPRNGLO; break;
-        case 1044: sys=SYS_QZS; p1=MINPRNQZS; p2=MAXPRNQZS; break;
-        case 1045:
-        case 1046: sys=SYS_GAL; p1=MINPRNGAL; p2=MAXPRNGAL; break;
+        case 1019: sys=SYS_GPS; set=0; p1=MINPRNGPS; p2=MAXPRNGPS; break;
+        case 1020: sys=SYS_GLO; set=0; p1=MINPRNGLO; p2=MAXPRNGLO; break;
+        case 1044: sys=SYS_QZS; set=0; p1=MINPRNQZS; p2=MAXPRNQZS; break;
+        case 1045: sys=SYS_GAL; set=1; p1=MINPRNGAL; p2=MAXPRNGAL; break;
+        case 1046: sys=SYS_GAL; set=0; p1=MINPRNGAL; p2=MAXPRNGAL; break;
+        case   63:
+        case 1042: sys=SYS_CMP; set=0; p1=MINPRNCMP; p2=MAXPRNCMP; break;
+        case 1041: sys=SYS_IRN; set=0; p1=MINPRNIRN; p2=MAXPRNIRN; break;
         default: return 0;
     }
     if (satsys(sat,&p0)!=sys) return satno(sys,p1);
     
     /* search next valid ephemeris */
-    for (p=p0>p2?p1:p0+1;p!=p0;p=p>=p2?p1:p+1) {
+    for (p=p0>=p2?p1:p0+1;p!=p0;p=p>=p2?p1:p+1) {
         
         if (sys==SYS_GLO) {
             sat=satno(sys,p);
@@ -255,7 +353,7 @@ static int nextsat(nav_t *nav, int sat, int msg)
         }
         else {
             sat=satno(sys,p);
-            if (nav->eph[sat-1].sat==sat) return sat;
+            if (nav->eph[sat-1+MAXSAT*set].sat==sat) return sat;
         }
     }
     return 0;
@@ -263,7 +361,7 @@ static int nextsat(nav_t *nav, int sat, int msg)
 /* write cyclic nav data messages --------------------------------------------*/
 static void write_nav_cycle(stream_t *str, strconv_t *conv)
 {
-    unsigned int tick=tickget();
+    uint32_t tick=tickget();
     int i,sat,tint;
     
     for (i=0;i<conv->nmsg;i++) {
@@ -285,7 +383,7 @@ static void write_nav_cycle(stream_t *str, strconv_t *conv)
             if (!gen_rtcm2(&conv->out,conv->msgs[i],0)) continue;
         }
         else if (conv->otype==STRFMT_RTCM3) {
-            if (!gen_rtcm3(&conv->out,conv->msgs[i],0)) continue;
+            if (!gen_rtcm3(&conv->out,conv->msgs[i],0,0)) continue;
         }
         else continue;
         
@@ -296,7 +394,7 @@ static void write_nav_cycle(stream_t *str, strconv_t *conv)
 /* write cyclic station info messages ----------------------------------------*/
 static void write_sta_cycle(stream_t *str, strconv_t *conv)
 {
-    unsigned int tick=tickget();
+    uint32_t tick=tickget();
     int i,tint;
     
     for (i=0;i<conv->nmsg;i++) {
@@ -312,7 +410,7 @@ static void write_sta_cycle(stream_t *str, strconv_t *conv)
             if (!gen_rtcm2(&conv->out,conv->msgs[i],0)) continue;
         }
         else if (conv->otype==STRFMT_RTCM3) {
-            if (!gen_rtcm3(&conv->out,conv->msgs[i],0)) continue;
+            if (!gen_rtcm3(&conv->out,conv->msgs[i],0,0)) continue;
         }
         else continue;
         
@@ -321,7 +419,7 @@ static void write_sta_cycle(stream_t *str, strconv_t *conv)
     }
 }
 /* convert stearm ------------------------------------------------------------*/
-static void strconv(stream_t *str, strconv_t *conv, unsigned char *buff, int n)
+static void strconv(stream_t *str, strconv_t *conv, uint8_t *buff, int n)
 {
     int i,ret;
     
@@ -352,6 +450,30 @@ static void strconv(stream_t *str, strconv_t *conv, unsigned char *buff, int n)
     write_nav_cycle(str,conv);
     write_sta_cycle(str,conv);
 }
+/* periodic command ----------------------------------------------------------*/
+static void periodic_cmd(int cycle, const char *cmd, stream_t *stream)
+{
+    const char *p=cmd,*q;
+    char msg[1024],*r;
+    int n,period;
+    
+    for (p=cmd;;p=q+1) {
+        for (q=p;;q++) if (*q=='\r'||*q=='\n'||*q=='\0') break;
+        n=(int)(q-p); strncpy(msg,p,n); msg[n]='\0';
+        
+        period=0;
+        if ((r=strrchr(msg,'#'))) {
+            sscanf(r,"# %d",&period);
+            *r='\0';
+            while (*--r==' ') *r='\0'; /* delete tail spaces */
+        }
+        if (period<=0) period=1000;
+        if (*msg&&cycle%period==0) {
+            strsendcmd(stream,msg);
+        }
+        if (!*q) break;
+    }
+}
 /* stearm server thread ------------------------------------------------------*/
 #ifdef WIN32
 static DWORD WINAPI strsvrthread(void *arg)
@@ -360,44 +482,69 @@ static void *strsvrthread(void *arg)
 #endif
 {
     strsvr_t *svr=(strsvr_t *)arg;
-    unsigned int tick,ticknmea;
-    int i,n;
+    sol_t sol_nmea={{0}};
+    uint32_t tick,tick_nmea;
+    uint8_t buff[1024];
+    int i,n,cyc;
     
     tracet(3,"strsvrthread:\n");
     
-    svr->state=1;
     svr->tick=tickget();
-    ticknmea=svr->tick-1000;
+    tick_nmea=svr->tick-1000;
     
-    while (svr->state) {
+    for (cyc=0;svr->state;cyc++) {
         tick=tickget();
         
         /* read data from input stream */
-        n=strread(svr->stream,svr->buff,svr->buffsize);
-        
-        /* write data to output streams */
+        while ((n=strread(svr->stream,svr->buff,svr->buffsize))>0&&svr->state) {
+            
+            /* write data to output streams */
+            for (i=1;i<svr->nstr;i++) {
+                if (svr->conv[i-1]) {
+                    strconv(svr->stream+i,svr->conv[i-1],svr->buff,n);
+                }
+                else {
+                    strwrite(svr->stream+i,svr->buff,n);
+                }
+            }
+            /* write data to log stream */
+            strwrite(svr->strlog,svr->buff,n);
+            
+            lock(&svr->lock);
+            for (i=0;i<n&&svr->npb<svr->buffsize;i++) {
+                svr->pbuf[svr->npb++]=svr->buff[i];
+            }
+            unlock(&svr->lock);
+        }
         for (i=1;i<svr->nstr;i++) {
-            if (svr->conv[i-1]) {
-                strconv(svr->stream+i,svr->conv[i-1],svr->buff,n);
+            
+            /* read message from output stream */
+            while ((n=strread(svr->stream+i,buff,sizeof(buff)))>0) {
+                
+                /* relay back message from output stream to input stream */
+                if (i==svr->relayback) {
+                    strwrite(svr->stream,buff,n);
+                }
+                /* write data to log stream */
+                strwrite(svr->strlog+i,buff,n);
             }
-            else {
-                strwrite(svr->stream+i,svr->buff,n);
-            }
+        }
+        /* write periodic command to input stream */
+        for (i=0;i<svr->nstr;i++) {
+            periodic_cmd(cyc*svr->cycle,svr->cmds_periodic[i],svr->stream+i);
         }
         /* write nmea messages to input stream */
-        if (svr->nmeacycle>0&&(int)(tick-ticknmea)>=svr->nmeacycle) {
-            strsendnmea(svr->stream,svr->nmeapos);
-            ticknmea=tick;
+        if (svr->nmeacycle>0&&(int)(tick-tick_nmea)>=svr->nmeacycle) {
+            sol_nmea.stat=SOLQ_SINGLE;
+            sol_nmea.time=utc2gpst(timeget());
+            matcpy(sol_nmea.rr,svr->nmeapos,3,1);
+            strsendnmea(svr->stream,&sol_nmea);
+            tick_nmea=tick;
         }
-        lock(&svr->lock);
-        for (i=0;i<n&&svr->npb<svr->buffsize;i++) {
-            svr->pbuf[svr->npb++]=svr->buff[i];
-        }
-        unlock(&svr->lock);
-        
         sleepms(svr->cycle-(int)(tickget()-tick));
     }
     for (i=0;i<svr->nstr;i++) strclose(svr->stream+i);
+    for (i=0;i<svr->nstr;i++) strclose(svr->strlog+i);
     svr->npb=0;
     free(svr->buff); svr->buff=NULL;
     free(svr->pbuf); svr->pbuf=NULL;
@@ -420,11 +567,14 @@ extern void strsvrinit(strsvr_t *svr, int nout)
     svr->cycle=0;
     svr->buffsize=0;
     svr->nmeacycle=0;
+    svr->relayback=0;
     svr->npb=0;
+    for (i=0;i<16;i++) *svr->cmds_periodic[i]='\0';
     for (i=0;i<3;i++) svr->nmeapos[i]=0.0;
     svr->buff=svr->pbuf=NULL;
     svr->tick=0;
     for (i=0;i<nout+1&&i<16;i++) strinit(svr->stream+i);
+    for (i=0;i<nout+1&&i<16;i++) strinit(svr->strlog+i);
     svr->nstr=i;
     for (i=0;i<16;i++) svr->conv[i]=NULL;
     svr->thread=0;
@@ -441,26 +591,48 @@ extern void strsvrinit(strsvr_t *svr, int nout)
 *              opts[4]= server cycle (ms)
 *              opts[5]= nmea request cycle (ms) (0:no)
 *              opts[6]= file swap margin (s)
+*              opts[7]= relay back of output stream (0:no)
 *          int    *strs     I   stream types (STR_???)
 *              strs[0]= input stream
 *              strs[1]= output stream 1
 *              strs[2]= output stream 2
 *              strs[3]= output stream 3
+*              ...
 *          char   **paths   I   stream paths
 *              paths[0]= input stream
 *              paths[1]= output stream 1
 *              paths[2]= output stream 2
 *              paths[3]= output stream 3
-*          strcnv **conv    I   stream converter
+*              ...
+*          char   **logs    I   log paths
+*              logs[0]= input log path
+*              logs[1]= output stream 1 return log path
+*              logs[2]= output stream 2 retrun log path
+*              logs[3]= output stream 2 retrun log path
+*              ...
+*          strconv_t **conv I   stream converter
 *              conv[0]= output stream 1 converter
 *              conv[1]= output stream 2 converter
 *              conv[2]= output stream 3 converter
-*          char   *cmd      I   input stream start command (NULL: no cmd)
+*              ...
+*          char   **cmds    I   start/stop commands (NULL: no cmd)
+*              cmds[0]= input stream command
+*              cmds[1]= output stream 1 command
+*              cmds[2]= output stream 2 command
+*              cmds[3]= output stream 3 command
+*              ...
+*          char   **cmds_periodic I periodic commands (NULL: no cmd)
+*              cmds[0]= input stream command
+*              cmds[1]= output stream 1 command
+*              cmds[2]= output stream 2 command
+*              cmds[3]= output stream 3 command
+*              ...
 *          double *nmeapos  I   nmea request position (ecef) (m) (NULL: no)
 * return : status (0:error,1:ok)
 *-----------------------------------------------------------------------------*/
 extern int strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
-                       strconv_t **conv, const char *cmd, const double *nmeapos)
+                       char **logs, strconv_t **conv, char **cmds,
+                       char **cmds_periodic, const double *nmeapos)
 {
     int i,rw,stropt[5]={0};
     char file1[MAXSTRPATH],file2[MAXSTRPATH],*p;
@@ -477,12 +649,15 @@ extern int strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
     svr->cycle=opts[4];
     svr->buffsize=opts[3]<4096?4096:opts[3]; /* >=4096byte */
     svr->nmeacycle=0<opts[5]&&opts[5]<1000?1000:opts[5]; /* >=1s */
+    svr->relayback=opts[7];
     for (i=0;i<3;i++) svr->nmeapos[i]=nmeapos?nmeapos[i]:0.0;
-    
+    for (i=0;i<svr->nstr;i++) {
+        strcpy(svr->cmds_periodic[i],!cmds_periodic[i]?"":cmds_periodic[i]);
+    }
     for (i=0;i<svr->nstr-1;i++) svr->conv[i]=conv[i];
     
-    if (!(svr->buff=(unsigned char *)malloc(svr->buffsize))||
-        !(svr->pbuf=(unsigned char *)malloc(svr->buffsize))) {
+    if (!(svr->buff=(uint8_t *)malloc(svr->buffsize))||
+        !(svr->pbuf=(uint8_t *)malloc(svr->buffsize))) {
         free(svr->buff); free(svr->pbuf);
         return 0;
     }
@@ -491,18 +666,33 @@ extern int strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
         strcpy(file1,paths[0]); if ((p=strstr(file1,"::"))) *p='\0';
         strcpy(file2,paths[i]); if ((p=strstr(file2,"::"))) *p='\0';
         if (i>0&&*file1&&!strcmp(file1,file2)) {
-            sprintf(svr->stream[i].msg,"output path error: %s",file2);
+            sprintf(svr->stream[i].msg,"output path error: %-512.512s",file2);
             for (i--;i>=0;i--) strclose(svr->stream+i);
             return 0;
         }
-        rw=i==0?STR_MODE_R:STR_MODE_W;
-        if (strs[i]!=STR_FILE) rw|=STR_MODE_W;
+        if (strs[i]==STR_FILE) {
+            rw=i==0?STR_MODE_R:STR_MODE_W;
+        }
+        else {
+            rw=STR_MODE_RW;
+        }
         if (stropen(svr->stream+i,strs[i],rw,paths[i])) continue;
         for (i--;i>=0;i--) strclose(svr->stream+i);
         return 0;
     }
-    /* write start command to input stream */
-    if (cmd) strsendcmd(svr->stream,cmd);
+    /* open log streams */
+    for (i=0;i<svr->nstr;i++) {
+        if (strs[i]==STR_NONE||strs[i]==STR_FILE||!*logs[i]) continue;
+        stropen(svr->strlog+i,STR_FILE,STR_MODE_W,logs[i]);
+    }
+    /* write start commands to input/output streams */
+    for (i=0;i<svr->nstr;i++) {
+        if (!cmds[i]) continue;
+        strwrite(svr->stream+i,(uint8_t *)"",0); /* for connect */
+        sleepms(100);
+        strsendcmd(svr->stream+i,cmds[i]);
+    }
+    svr->state=1;
     
     /* create stream server thread */
 #ifdef WIN32
@@ -511,6 +701,7 @@ extern int strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
     if (pthread_create(&svr->thread,NULL,strsvrthread,svr)) {
 #endif
         for (i=0;i<svr->nstr;i++) strclose(svr->stream+i);
+        svr->state=0;
         return 0;
     }
     return 1;
@@ -518,15 +709,23 @@ extern int strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
 /* stop stream server ----------------------------------------------------------
 * start stream server
 * args   : strsvr_t *svr    IO  stream server struct
-*          char  *cmd       I   input stop command (NULL: no cmd)
+*          char  **cmds     I   stop commands (NULL: no cmd)
+*              cmds[0]= input stream command
+*              cmds[1]= output stream 1 command
+*              cmds[2]= output stream 2 command
+*              cmds[3]= output stream 3 command
+*              ...
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void strsvrstop(strsvr_t *svr, const char *cmd)
+extern void strsvrstop(strsvr_t *svr, char **cmds)
 {
+    int i;
+    
     tracet(3,"strsvrstop:\n");
     
-    if (cmd) strsendcmd(svr->stream,cmd);
-    
+    for (i=0;i<svr->nstr;i++) {
+        if (cmds[i]) strsendcmd(svr->stream+i,cmds[i]);
+    }
     svr->state=0;
     
 #ifdef WIN32
@@ -540,38 +739,40 @@ extern void strsvrstop(strsvr_t *svr, const char *cmd)
 * get status of stream server
 * args   : strsvr_t *svr    IO  stream sever struct
 *          int    *stat     O   stream status
+*          int    *log_stat O   log status
 *          int    *byte     O   bytes received/sent
 *          int    *bps      O   bitrate received/sent
 *          char   *msg      O   messages
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void strsvrstat(strsvr_t *svr, int *stat, int *byte, int *bps, char *msg)
+extern void strsvrstat(strsvr_t *svr, int *stat, int *log_stat, int *byte,
+                       int *bps, char *msg)
 {
     char s[MAXSTRMSG]="",*p=msg;
-    int i;
+    int i,bps_in;
     
     tracet(4,"strsvrstat:\n");
     
     for (i=0;i<svr->nstr;i++) {
         if (i==0) {
             strsum(svr->stream,byte,bps,NULL,NULL);
-            stat[i]=strstat(svr->stream,s);
         }
         else {
-            strsum(svr->stream+i,NULL,NULL,byte+i,bps+i);
-            stat[i]=strstat(svr->stream+i,s);
+            strsum(svr->stream+i,NULL,&bps_in,byte+i,bps+i);
         }
+        stat[i]=strstat(svr->stream+i,s);
         if (*s) p+=sprintf(p,"(%d) %s ",i,s);
+        log_stat[i]=strstat(svr->strlog+i,s);
     }
 }
 /* peek input/output stream ----------------------------------------------------
 * peek input/output stream of stream server
 * args   : strsvr_t *svr    IO  stream sever struct
-*          unsigend char *msg O stream buff
-*          int    nmax      I  buffer size (bytes)
+*          uint8_t *buff    O   stream buff
+*          int    nmax      I   buffer size (bytes)
 * return : stream size (bytes)
 *-----------------------------------------------------------------------------*/
-extern int strsvrpeek(strsvr_t *svr, unsigned char *buff, int nmax)
+extern int strsvrpeek(strsvr_t *svr, uint8_t *buff, int nmax)
 {
     int n;
     
@@ -589,3 +790,4 @@ extern int strsvrpeek(strsvr_t *svr, unsigned char *buff, int nmax)
     unlock(&svr->lock);
     return n;
 }
+

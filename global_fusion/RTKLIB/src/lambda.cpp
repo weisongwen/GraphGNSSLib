@@ -12,6 +12,7 @@
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
 * history : 2007/01/13 1.0 new
+*           2015/05/31 1.1 add api lambda_reduction(), lambda_search()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -36,14 +37,14 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PointStamped.h>
-#include <novatel_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
-#include <novatel_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
+// #include <novatel_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
+// #include <novatel_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
 
 #include <nlosExclusion/GNSS_Raw_Array.h>
 #include <nlosExclusion/GNSS_Raw.h>
 #include "../../include/gnss_tools.h"
-
-static const char rcsid[]="$Id: lambda.c,v 1.1 2008/07/17 21:48:06 ttaka Exp $";
 
 /* constants/macros ----------------------------------------------------------*/
 
@@ -60,12 +61,7 @@ static int LD(int n, const double *Q, double *L, double *D)
     double a,*A=mat(n,n);
     
     memcpy(A,Q,sizeof(double)*n*n);
-    // for(int s=0;s<(n*n);s++)
-    // {
-    //     A[s] = Q[s];
-    // }
     for (i=n-1;i>=0;i--) {
-        // LOG(INFO)<< "A[i+i*n]-> " <<i+i*n << " "<< A[i+i*n];
         if ((D[i]=A[i+i*n])<=0.0) 
         {
             LOG(INFO)<< "A[i+i*n]-> " <<i+i*n << " "<< A[i+i*n];
@@ -75,7 +71,7 @@ static int LD(int n, const double *Q, double *L, double *D)
             info=-1; 
             break;
         }
-        a=sqrt(D[i]);
+        a = sqrt(D[i]);
         for (j=0;j<=i;j++) L[i+j*n]=A[i+j*n]/a;
         for (j=0;j<=i-1;j++) for (k=0;k<=j;k++) A[j+k*n]-=L[i+k*n]*L[i+j*n];
         for (j=0;j<=i;j++) L[i+j*n]/=L[i+i*n];
@@ -193,8 +189,8 @@ static int search(int n, int m, const double *L, const double *D,
 /* lambda/mlambda integer least-square estimation ------------------------------
 * integer least-square estimation. reduction is performed by lambda (ref.[1]),
 * and search by mlambda (ref.[2]).
-* args   : int    n      I  number of float parameters (bias) (usually bias1,...)
-*          int    m      I  number of fixed solutions (usually 2)
+* args   : int    n      I  number of float parameters
+*          int    m      I  number of fixed solutions
 *          double *a     I  float parameters (n x 1)
 *          double *Q     I  covariance matrix of float parameters (n x n)
 *          double *F     O  fixed solutions (n x m)
@@ -207,31 +203,9 @@ extern int lambda(int n, int m, const double *a, const double *Q, double *F,
 {
     int info;
     double *L,*D,*Z,*z,*E;
-
-    // printf("")
-    // LOG(INFO)<< "n-> "<<n;
-    // LOG(INFO)<< "m-> "<<m;
-    Eigen::MatrixXd Q_matrix;
-    double tt[n*n];
-    for(int i=0; i<n*n;i++)
-    {
-        tt[i] = Q[i];
-    }
-    // Q_matrix.resize(n,n);
-    Q_matrix = Eigen::Map<Matrix<double, Dynamic, Dynamic,ColMajor>>(tt,n,n);
-    // std::cout << "Q_matrix-> \n"<<std::setprecision(4)<<Q_matrix<<"\n";
-
-    // for(int i = 0; i <n * n;i++)
-    // {
-    //     LOG(INFO)<< "i-> " <<i<< "   Q[i]-> "<<Q[i];
-    // }
-    for(int i = 0; i <n;i++)
-    {
-        // LOG(INFO)<< "i-> " <<i<< "   a[i]-> "<<a[i];
-    }
     
     if (n<=0||m<=0) return -1;
-    L=zeros(n,n); D=mat(n,1); Z=eye(n); z=mat(n,1),E=mat(n,m);
+    L=zeros(n,n); D=mat(n,1); Z=eye(n); z=mat(n,1); E=mat(n,m);
     
     /* LD factorization */
     if (!(info=LD(n,Q,L,D))) {
@@ -246,20 +220,67 @@ extern int lambda(int n, int m, const double *a, const double *Q, double *F,
             info=solve("T",Z,E,n,m,F); /* F=Z'\E */
         }
     }
-
-    for(int i = 0; i <n;i++)
-    {
-        // LOG(INFO)<< "F[i]-> "<<F[i];
-    }
-
-    // for(int i = 0; i <n * n;i++)
-    // {
-    //     LOG(INFO)<< "Q[i]-> "<<Q[i];
-    // }
-
-    LOG(INFO)<< "s[0]-> "<<s[0];
-    LOG(INFO)<< "s[1]-> "<<s[1];
-
     free(L); free(D); free(Z); free(z); free(E);
+    return info;
+}
+/* lambda reduction ------------------------------------------------------------
+* reduction by lambda (ref [1]) for integer least square
+* args   : int    n      I  number of float parameters
+*          double *Q     I  covariance matrix of float parameters (n x n)
+*          double *Z     O  lambda reduction matrix (n x n)
+* return : status (0:ok,other:error)
+*-----------------------------------------------------------------------------*/
+extern int lambda_reduction(int n, const double *Q, double *Z)
+{
+    double *L,*D;
+    int i,j,info;
+    
+    if (n<=0) return -1;
+    
+    L=zeros(n,n); D=mat(n,1);
+    
+    for (i=0;i<n;i++) for (j=0;j<n;j++) {
+        Z[i+j*n]=i==j?1.0:0.0;
+    }
+    /* LD factorization */
+    if ((info=LD(n,Q,L,D))) {
+        free(L); free(D);
+        return info;
+    }
+    /* lambda reduction */
+    reduction(n,L,D,Z);
+     
+    free(L); free(D);
+    return 0;
+}
+/* mlambda search --------------------------------------------------------------
+* search by  mlambda (ref [2]) for integer least square
+* args   : int    n      I  number of float parameters
+*          int    m      I  number of fixed solutions
+*          double *a     I  float parameters (n x 1)
+*          double *Q     I  covariance matrix of float parameters (n x n)
+*          double *F     O  fixed solutions (n x m)
+*          double *s     O  sum of squared residulas of fixed solutions (1 x m)
+* return : status (0:ok,other:error)
+*-----------------------------------------------------------------------------*/
+extern int lambda_search(int n, int m, const double *a, const double *Q,
+                         double *F, double *s)
+{
+    double *L,*D;
+    int info;
+    
+    if (n<=0||m<=0) return -1;
+    
+    L=zeros(n,n); D=mat(n,1);
+    
+    /* LD factorization */
+    if ((info=LD(n,Q,L,D))) {
+        free(L); free(D);
+        return info;
+    }
+    /* mlambda search */
+    info=search(n,m,L,D,a,F,s);
+    
+    free(L); free(D);
     return info;
 }

@@ -1,14 +1,14 @@
 /*------------------------------------------------------------------------------
 * ephemeris.c : satellite ephemeris and clock functions
 *
-*          Copyright (C) 2010-2014 by T.TAKASU, All rights reserved.
+*          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * references :
-*     [1] IS-GPS-200D, Navstar GPS Space Segment/Navigation User Interfaces,
-*         7 March, 2006
+*     [1] IS-GPS-200K, Navstar GPS Space Segment/Navigation User Interfaces,
+*         May 6, 2019
 *     [2] Global Navigation Satellite System GLONASS, Interface Control Document
-*         Navigational radiosignal In bands L1, L2, (Edition 5.1), 2008
-*     [3] RTCA/DO-229C, Minimum operational performanc standards for global
+*         Navigational radiosignal In bands L1, L2, (Version 5.1), 2008
+*     [3] RTCA/DO-229C, Minimum operational performance standards for global
 *         positioning system/wide area augmentation system airborne equipment,
 *         RTCA inc, November 28, 2001
 *     [4] RTCM Paper, April 12, 2010, Proposed SSR Messages for SV Orbit Clock,
@@ -16,15 +16,15 @@
 *     [5] RTCM Paper 012-2009-SC104-528, January 28, 2009 (previous ver of [4])
 *     [6] RTCM Paper 012-2009-SC104-582, February 2, 2010 (previous ver of [4])
 *     [7] European GNSS (Galileo) Open Service Signal In Space Interface Control
-*         Document, Issue 1, February, 2010
-*     [8] Quasi-Zenith Satellite System Navigation Service Interface Control
-*         Specification for QZSS (IS-QZSS) V1.1, Japan Aerospace Exploration
-*         Agency, July 31, 2009
+*         Document, Issue 1.3, December, 2016
+*     [8] Quasi-Zenith Satellite System Interface Specification Satellite
+*         Positioning, Navigation and Timing Service (IS-QZSS-PNT-003), Cabinet
+*         Office, November 5, 2018
 *     [9] BeiDou navigation satellite system signal in space interface control
-*         document open service signal B1I (version 1.0), China Satellite
-*         Navigation office, December 2012
-*     [10] RTCM Standard 10403.1 - Amendment 5, Differential GNSS (Global
-*         Navigation Satellite Systems) Services - version 3, July 1, 2011
+*         document open service signal B1I (version 3.0), China Satellite
+*         Navigation office, February, 2019
+*     [10] RTCM Standard 10403.3, Differential GNSS (Global Navigation
+*         Satellite Systems) Services - version 3, October 7, 2016
 *
 * version : $Revision:$ $Date:$
 * history : 2010/07/28 1.1  moved from rtkcmn.c
@@ -51,10 +51,27 @@
 *           2014/10/24 1.9  fix bug on return of var_uraeph() if ura<0||15<ura
 *           2014/12/07 1.10 modify MAXDTOE for qzss,gal and bds
 *                           test max number of iteration for Kepler
+*           2015/08/26 1.11 update RTOL_ELPLER 1E-14 -> 1E-13
+*                           set MAX_ITER_KEPLER for alm2pos()
+*           2017/04/11 1.12 fix bug on max number of obs data in satposs()
+*           2018/10/10 1.13 update reference [7]
+*                           support ura value in var_uraeph() for galileo
+*                           test eph->flag to recognize beidou geo
+*                           add api satseleph() for ephemeris selection
+*           2020/11/30 1.14 update references [1],[2],[8],[9] and [10]
+*                           add API getseleph()
+*                           rename API satseleph() as setseleph()
+*                           support NavIC/IRNSS by API satpos() and satposs()
+*                           support BDS C59-63 as GEO satellites in eph2pos()
+*                           default selection of I/NAV for Galileo ephemeris
+*                           no support EPHOPT_LEX by API satpos() and satposs()
+*                           unselect Galileo ephemeris with AOD<=0 in seleph()
+*                           fix bug on clock iteration in eph2clk(), geph2clk()
+*                           fix bug on clock reference time in satpos_ssr()
+*                           fix bug on wrong value with ura=15 in var_ura()
+*                           use integer types in stdint.h
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
-
-static const char rcsid[]="$Id:$";
 
 /* constants and macros ------------------------------------------------------*/
 
@@ -76,7 +93,7 @@ static const char rcsid[]="$Id:$";
 
 #define ERREPH_GLO 5.0            /* error of glonass ephemeris (m) */
 #define TSTEP    60.0             /* integration step glonass ephemeris (s) */
-#define RTOL_KEPLER 1E-14         /* relative tolerance for Kepler equation */
+#define RTOL_KEPLER 1E-13         /* relative tolerance for Kepler equation */
 
 #define DEFURASSR 0.15            /* default accurary of ssr corr (m) */
 #define MAXECORSSR 10.0           /* max orbit correction of ssr (m) */
@@ -84,19 +101,34 @@ static const char rcsid[]="$Id:$";
 #define MAXAGESSR 90.0            /* max age of ssr orbit and clock (s) */
 #define MAXAGESSR_HRCLK 10.0      /* max age of ssr high-rate clock (s) */
 #define STD_BRDCCLK 30.0          /* error of broadcast clock (m) */
+#define STD_GAL_NAPA 500.0        /* error of galileo ephemeris for NAPA (m) */
 
 #define MAX_ITER_KEPLER 30        /* max number of iteration of Kelpler */
 
-/* variance by ura ephemeris (ref [1] 20.3.3.3.1.1) --------------------------*/
-static double var_uraeph(int ura)
+/* ephemeris selections ------------------------------------------------------*/
+static int eph_sel[]={ /* GPS,GLO,GAL,QZS,BDS,IRN,SBS */
+    0,0,0,0,0,0,0
+};
+
+/* variance by ura ephemeris -------------------------------------------------*/
+static double var_uraeph(int sys, int ura)
 {
     const double ura_value[]={   
         2.4,3.4,4.85,6.85,9.65,13.65,24.0,48.0,96.0,192.0,384.0,768.0,1536.0,
         3072.0,6144.0
     };
-    return ura<0||15<ura?SQR(6144.0):SQR(ura_value[ura]);
+    if (sys==SYS_GAL) { /* galileo sisa (ref [7] 5.1.11) */
+        if (ura<= 49) return SQR(ura*0.01);
+        if (ura<= 74) return SQR(0.5+(ura- 50)*0.02);
+        if (ura<= 99) return SQR(1.0+(ura- 75)*0.04);
+        if (ura<=125) return SQR(2.0+(ura-100)*0.16);
+        return SQR(STD_GAL_NAPA);
+    }
+    else { /* gps ura (ref [1] 20.3.3.3.1.1) */
+        return ura<0||14<ura?SQR(6144.0):SQR(ura_value[ura]);
+    }
 }
-/* variance by ura ssr (ref [4]) ---------------------------------------------*/
+/* variance by ura ssr (ref [10] table 3.3-1 DF389) --------------------------*/
 static double var_urassr(int ura)
 {
     double std;
@@ -117,6 +149,7 @@ static double var_urassr(int ura)
 extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
 {
     double tk,M,E,Ek,sinE,cosE,u,r,i,O,x,y,sinO,cosO,cosi,mu;
+    int n;
     
     trace(4,"alm2pos : time=%s sat=%2d\n",time_str(time,3),alm->sat);
     
@@ -129,10 +162,14 @@ extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
     mu=satsys(alm->sat,NULL)==SYS_GAL?MU_GAL:MU_GPS;
     
     M=alm->M0+sqrt(mu/(alm->A*alm->A*alm->A))*tk;
-    for (E=M,sinE=Ek=0.0;fabs(E-Ek)>1E-12;) {
-        Ek=E; sinE=sin(Ek); E=M+alm->e*sinE;
+    for (n=0,E=M,Ek=0.0;fabs(E-Ek)>RTOL_KEPLER&&n<MAX_ITER_KEPLER;n++) {
+        Ek=E; E-=(E-alm->e*sin(E)-M)/(1.0-alm->e*cos(E));
     }
-    cosE=cos(E);
+    if (n>=MAX_ITER_KEPLER) {
+        trace(2,"alm2pos: kepler iteration overflow sat=%2d\n",alm->sat);
+        return;
+    }
+    sinE=sin(E); cosE=cos(E);
     u=atan2(sqrt(1.0-alm->e*alm->e)*sinE,cosE-alm->e)+alm->omg;
     r=alm->A*(1.0-alm->e*cosE);
     i=alm->i0;
@@ -153,15 +190,15 @@ extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
 *-----------------------------------------------------------------------------*/
 extern double eph2clk(gtime_t time, const eph_t *eph)
 {
-    double t;
+    double t,ts;
     int i;
     
     trace(4,"eph2clk : time=%s sat=%2d\n",time_str(time,3),eph->sat);
     
-    t=timediff(time,eph->toc);
+    t=ts=timediff(time,eph->toc);
     
     for (i=0;i<2;i++) {
-        t-=eph->f0+eph->f1*t+eph->f2*t*t;
+        t=ts-(eph->f0+eph->f1*t+eph->f2*t*t);
     }
     return eph->f0+eph->f1*t+eph->f2*t*t;
 }
@@ -204,7 +241,7 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
         Ek=E; E-=(E-eph->e*sin(E)-M)/(1.0-eph->e*cos(E));
     }
     if (n>=MAX_ITER_KEPLER) {
-        trace(2,"kepler iteration overflow sat=%2d\n",eph->sat);
+        trace(2,"eph2pos: kepler iteration overflow sat=%2d\n",eph->sat);
         return;
     }
     sinE=sin(E); cosE=cos(E);
@@ -220,8 +257,8 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
     i+=eph->cis*sin2u+eph->cic*cos2u;
     x=r*cos(u); y=r*sin(u); cosi=cos(i);
     
-    /* beidou geo satellite (ref [9]) */
-    if (sys==SYS_CMP&&prn<=5) {
+    /* beidou geo satellite */
+    if (sys==SYS_CMP&&(prn<=5||prn>=59)) { /* ref [9] table 4-1 */
         O=eph->OMG0+eph->OMGd*tk-omge*eph->toes;
         sinO=sin(O); cosO=cos(O);
         xg=x*cosO-y*cosi*sinO;
@@ -246,7 +283,7 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
     *dts-=2.0*sqrt(mu*eph->A)*eph->e*sinE/SQR(CLIGHT);
     
     /* position and clock error variance */
-    *var=var_uraeph(eph->sva);
+    *var=var_uraeph(sys,eph->sva);
 }
 /* glonass orbit differential equations --------------------------------------*/
 static void deq(const double *x, double *xdot, const double *acc)
@@ -287,15 +324,15 @@ static void glorbit(double t, double *x, const double *acc)
 *-----------------------------------------------------------------------------*/
 extern double geph2clk(gtime_t time, const geph_t *geph)
 {
-    double t;
+    double t,ts;
     int i;
     
     trace(4,"geph2clk: time=%s sat=%2d\n",time_str(time,3),geph->sat);
     
-    t=timediff(time,geph->toe);
+    t=ts=timediff(time,geph->toe);
     
     for (i=0;i<2;i++) {
-        t-=-geph->taun+geph->gamn*t;
+        t=ts-(-geph->taun+geph->gamn*t);
     }
     return -geph->taun+geph->gamn*t;
 }
@@ -379,20 +416,23 @@ extern void seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
     }
     *dts=seph->af0+seph->af1*t;
     
-    *var=var_uraeph(seph->sva);
+    *var=var_uraeph(SYS_SBS,seph->sva);
 }
 /* select ephememeris --------------------------------------------------------*/
 static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
 {
     double t,tmax,tmin;
-    int i,j=-1;
+    int i,j=-1,sys,sel;
     
     trace(4,"seleph  : time=%s sat=%2d iode=%d\n",time_str(time,3),sat,iode);
     
-    switch (satsys(sat,NULL)) {
-        case SYS_QZS: tmax=MAXDTOE_QZS+1.0; break;
-        case SYS_GAL: tmax=MAXDTOE_GAL+1.0; break;
-        case SYS_CMP: tmax=MAXDTOE_CMP+1.0; break;
+    sys=satsys(sat,NULL);
+    switch (sys) {
+        case SYS_GPS: tmax=MAXDTOE+1.0    ; sel=eph_sel[0]; break;
+        case SYS_GAL: tmax=MAXDTOE_GAL    ; sel=eph_sel[2]; break;
+        case SYS_QZS: tmax=MAXDTOE_QZS+1.0; sel=eph_sel[3]; break;
+        case SYS_CMP: tmax=MAXDTOE_CMP+1.0; sel=eph_sel[4]; break;
+        case SYS_IRN: tmax=MAXDTOE_IRN+1.0; sel=eph_sel[5]; break;
         default: tmax=MAXDTOE+1.0; break;
     }
     tmin=tmax+1.0;
@@ -400,13 +440,19 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
     for (i=0;i<nav->n;i++) {
         if (nav->eph[i].sat!=sat) continue;
         if (iode>=0&&nav->eph[i].iode!=iode) continue;
+        if (sys==SYS_GAL) {
+            sel=getseleph(SYS_GAL);
+            if (sel==0&&!(nav->eph[i].code&(1<<9))) continue; /* I/NAV */
+            if (sel==1&&!(nav->eph[i].code&(1<<8))) continue; /* F/NAV */
+            if (timediff(nav->eph[i].toe,time)>=0.0) continue; /* AOD<=0 */
+        }
         if ((t=fabs(timediff(nav->eph[i].toe,time)))>tmax) continue;
         if (iode>=0) return nav->eph+i;
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(2,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",time_str(time,0),
-              sat,iode);
+        trace(3,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",
+              time_str(time,0),sat,iode);
         return NULL;
     }
     return nav->eph+j;
@@ -465,7 +511,7 @@ static int ephclk(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     
     sys=satsys(sat,NULL);
     
-    if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP) {
+    if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP||sys==SYS_IRN) {
         if (!(eph=seleph(teph,sat,-1,nav))) return 0;
         *dts=eph2clk(time,eph);
     }
@@ -497,9 +543,8 @@ static int ephpos(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     
     *svh=-1;
     
-    if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP) {
+    if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP||sys==SYS_IRN) {
         if (!(eph=seleph(teph,sat,iode,nav))) return 0;
-        
         eph2pos(time,eph,rs,dts,var);
         time=timeadd(time,tt);
         eph2pos(time,eph,rst,dtst,var);
@@ -514,7 +559,6 @@ static int ephpos(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     }
     else if (sys==SYS_SBS) {
         if (!(seph=selseph(teph,sat,nav))) return 0;
-        
         seph2pos(time,seph,rs,dts,var);
         time=timeadd(time,tt);
         seph2pos(time,seph,rst,dtst,var);
@@ -596,7 +640,7 @@ static int satpos_ssr(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
         return 0;
     }
     if (ssr->udi[0]>=1.0) t1-=ssr->udi[0]/2.0;
-    if (ssr->udi[1]>=1.0) t2-=ssr->udi[0]/2.0;
+    if (ssr->udi[1]>=1.0) t2-=ssr->udi[1]/2.0;
     
     for (i=0;i<3;i++) deph[i]=ssr->deph[i]+ssr->ddeph[i]*t1;
     dclk=ssr->dclk[0]+ssr->dclk[1]*t2+ssr->dclk[2]*t2*t2;
@@ -685,8 +729,6 @@ extern int satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
         case EPHOPT_SSRCOM: return satpos_ssr (time,teph,sat,nav, 1,rs,dts,var,svh);
         case EPHOPT_PREC  :
             if (!peph2pos(time,sat,nav,1,rs,dts,var)) break; else return 1;
-        case EPHOPT_LEX   :
-            if (!lexeph2pos(time,sat,nav,rs,dts,var)) break; else return 1;
     }
     *svh=-1;
     return 0;
@@ -718,36 +760,30 @@ extern int satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
 extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
                     int ephopt, double *rs, double *dts, double *var, int *svh)
 {
-    gtime_t time[MAXOBS]={{0}};
+    gtime_t time[2*MAXOBS]={{0}};
     double dt,pr;
     int i,j;
     
     trace(3,"satposs : teph=%s n=%d ephopt=%d\n",time_str(teph,3),n,ephopt);
     
-    /* weisong: initialze array */
-    for (i=0;i<n&&i<MAXOBS;i++) {
+    for (i=0;i<n&&i<2*MAXOBS;i++) {
         for (j=0;j<6;j++) rs [j+i*6]=0.0;
         for (j=0;j<2;j++) dts[j+i*2]=0.0;
         var[i]=0.0; svh[i]=0;
         
-        /* search any psuedorange 
-        * and save pseudorange to pr
-        * Ques: why a single pseudorange is saved in a array with size = 3
-        */
+        /* search any pseudorange */
         for (j=0,pr=0.0;j<NFREQ;j++) if ((pr=obs[i].P[j])!=0.0) break;
         
         if (j>=NFREQ) {
-            trace(2,"no pseudorange %s sat=%2d\n",time_str(obs[i].time,3),obs[i].sat);
+            trace(3,"no pseudorange %s sat=%2d\n",time_str(obs[i].time,3),obs[i].sat);
             continue;
         }
-        /* transmission time by satellite clock
-        * the satellite position motion during the signal transmission
-        */
+        /* transmission time by satellite clock */
         time[i]=timeadd(obs[i].time,-pr/CLIGHT);
         
         /* satellite clock bias by broadcast ephemeris */
         if (!ephclk(time[i],teph,obs[i].sat,nav,&dt)) {
-            trace(2,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            trace(3,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         time[i]=timeadd(time[i],-dt);
@@ -755,7 +791,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         /* satellite position and clock at transmission time */
         if (!satpos(time[i],teph,obs[i].sat,ephopt,nav,rs+i*6,dts+i*2,var+i,
                     svh+i)) {
-            trace(2,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            trace(3,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         /* if no precise clock available, use broadcast clock instead */
@@ -765,9 +801,51 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
             *var=SQR(STD_BRDCCLK);
         }
     }
-    for (i=0;i<n&&i<MAXOBS;i++) {
+    for (i=0;i<n&&i<2*MAXOBS;i++) {
         trace(4,"%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
               time_str(time[i],6),obs[i].sat,rs[i*6],rs[1+i*6],rs[2+i*6],
               dts[i*2]*1E9,var[i],svh[i]);
     }
+}
+/* set selected satellite ephemeris --------------------------------------------
+* Set selected satellite ephemeris for multiple ones like LNAV - CNAV, I/NAV -
+* F/NAV. Call it before calling satpos(),satposs() to use unselected one.
+* args   : int    sys       I   satellite system (SYS_???)
+*          int    sel       I   selection of ephemeris
+*                                 GPS,QZS : 0:LNAV ,1:CNAV  (default: LNAV)
+*                                 GAL     : 0:I/NAV,1:F/NAV (default: I/NAV)
+*                                 others  : undefined
+* return : none
+* notes  : default ephemeris selection for galileo is any.
+*-----------------------------------------------------------------------------*/
+extern void setseleph(int sys, int sel)
+{
+    switch (sys) {
+        case SYS_GPS: eph_sel[0]=sel; break;
+        case SYS_GLO: eph_sel[1]=sel; break;
+        case SYS_GAL: eph_sel[2]=sel; break;
+        case SYS_QZS: eph_sel[3]=sel; break;
+        case SYS_CMP: eph_sel[4]=sel; break;
+        case SYS_IRN: eph_sel[5]=sel; break;
+        case SYS_SBS: eph_sel[6]=sel; break;
+    }
+}
+/* get selected satellite ephemeris -------------------------------------------
+* Get the selected satellite ephemeris.
+* args   : int    sys       I   satellite system (SYS_???)
+* return : selected ephemeris
+*            refer setseleph()
+*-----------------------------------------------------------------------------*/
+extern int getseleph(int sys)
+{
+    switch (sys) {
+        case SYS_GPS: return eph_sel[0];
+        case SYS_GLO: return eph_sel[1];
+        case SYS_GAL: return eph_sel[2];
+        case SYS_QZS: return eph_sel[3];
+        case SYS_CMP: return eph_sel[4];
+        case SYS_IRN: return eph_sel[5];
+        case SYS_SBS: return eph_sel[6];
+    }
+    return 0;
 }

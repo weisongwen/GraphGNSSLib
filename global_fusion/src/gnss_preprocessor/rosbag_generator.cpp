@@ -40,7 +40,8 @@
 // ros
 #include <ros/ros.h>
 /* Reference from NovAtel GNSS/INS */
-#include <novatel_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
 #include "gnss_tools.h"
 #include <nlosExclusion/GNSS_Raw_Array.h>
 #include <geometry_msgs/Point32.h>
@@ -61,8 +62,8 @@
 
 #include <sensor_msgs/NavSatFix.h>
 
-#include <novatel_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
-#include <novatel_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/INSPVAX.h> // novatel_msgs/INSPVAX
+#include <novatel_oem7_msgs/BESTPOS.h> // novatel_msgs/INSPVAX
 
 // rtklib
 #include <stdarg.h>
@@ -166,9 +167,9 @@ public:
     * @return void
     @ 
     */
-    void span_bp_callback(const novatel_msgs::INSPVAXConstPtr& fix_msg)
+    void span_bp_callback(const novatel_oem7_msgs::INSPVAXConstPtr& fix_msg)
     {
-        int gpsSec = fix_msg->header.gps_week_seconds;
+        int gpsSec = fix_msg->nov_header.gps_week_milliseconds;
         gpsSec = gpsSec / 1000;
         std::cout<<"GPS seconds from Rosbag" << gpsSec << "\n";
         if(finishGNSSReader)
